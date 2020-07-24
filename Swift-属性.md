@@ -186,3 +186,129 @@ Go Run
 - 如果多条线程同时第一次访问lazy属性，不能保证属性只被初始化一次。
 - 应用场景： 如图片的加载。
 
+### 延迟存储属性注意点
+1. 当结构体包含一个延迟存储属性是，只有var才能访问延迟存储属性。
+   - 因为延迟属性初始化时需要修改结构体的内存。
+```swift
+struct Point {
+    var x = 0
+    var y = 0
+    lazy var z = 0   // 初始化时需要修改结构体的内存
+}
+
+let p = Point()
+print(p.z)  // Cannot use mutating getter on immutable value: 'p' is a 'let' constant
+
+```
+但是改为class 就可以，这也是struct和class的区别
+```swift
+class Point {
+    var x = 0
+    var y = 0
+    lazy var z = 0   // 初始化时需要修改内存
+}
+
+let p = Point()
+print(p.z)  // 正常调用，此时修改的是堆控件内存
+```
+
+### 属性观察器(Property Observer)
+可以为非lazy的var存储属性设置属性观察器。
+```swift
+struct Circle {
+    var radius: Double {
+        willSet {
+            print("willSet", newValue)
+        }
+
+        didSet {
+            print("oldValue", oldValue)
+        }
+    }
+    
+    init() {
+        self.radius = 1.0
+        print("Circle init")
+    }
+}
+
+var circle = Circle()
+circle.radius = 10.5
+
+print(circle.radius)
+```
+- willSet 会传递新值，默认名称为newValue
+- didSet 会传递旧值，默认名称为oldValue
+- 在初始化器中设置属性的值，不会触发willSet和didSet
+- 在定义时给属性初始值，也不会触发willSet和didSet
+
+### 全局变量、局部变量
+属性观察器、计算属性的功能，同样可以应用在全局变量、局部变量身上
+```swift
+var test: Int {
+    get {
+        print("xxxxxx  get")
+        return 0
+    }
+    
+    set {
+        print("yyyyy  set")
+    }
+}
+
+func test1() {
+    var age: Int = 0 {
+        willSet {
+            print("xxxxxx  willSet", newValue)
+        }
+        
+        didSet {
+            print("xxxxxx  didSet", oldValue)
+        }
+    }
+    
+    age = 22
+}
+
+test1()
+```
+### inout的再次研究
+```swift
+struct Shape {
+    var width: Int
+    var side: Int {
+        willSet {
+            print("willSetSide", newValue)
+        }
+        didSet {
+            print("didSetdid")
+        }
+    }
+    
+    var girth: Int {
+        set {
+            width = newValue / side
+            print("setGirth", newValue)
+        }
+        get {
+            print("getGirth")
+            return width * side
+        }
+    }
+    
+    func show() {
+        print("width = \(width), side = \(side), girth = \(girth)")
+    }
+}
+
+// 传入一个inout 参数
+func test(_ num: inout Int) {
+    num = 20
+}
+
+var s = Shape(width: 10, side: 4)
+test(&s.width)
+s.show()
+```
+汇编分析
+
